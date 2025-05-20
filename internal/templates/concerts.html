@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Error - Groupie Trackers</title>
+    <title>Concerts - Groupie Trackers</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/styles.css">
 </head>
@@ -28,14 +28,37 @@
     </nav>
 
     <div class="container mt-4">
-        <h1 class="text-center mb-4">Error</h1>
-        <div class="alert alert-danger text-center" role="alert">
-            <h4 class="alert-heading">Error {{.StatusCode}}</h4>
-            <p>{{.Message}}</p>
-            <hr>
-            <p class="mb-0">
-                <a href="/" class="btn btn-primary">Return to Home</a>
-            </p>
+        <h1 class="text-center mb-4">All Concerts</h1>
+
+        {{if .}}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>Artist</th>
+                            <th>Location</th>
+                            <th>Dates</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .}}
+                            <tr>
+                                <td>{{.ArtistName}}</td>
+                                <td>{{.Location}}</td>
+                                <td>{{range $i, $date := .Dates}}{{if $i}}, {{end}}{{$date}}{{end}}</td>
+                            </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        {{else}}
+            <div class="alert alert-warning text-center" role="alert">
+                No concerts found. Please try again later.
+            </div>
+        {{end}}
+
+        <div class="text-center mt-4">
+            <a href="/" class="btn btn-secondary">Back to Home</a>
         </div>
     </div>
 

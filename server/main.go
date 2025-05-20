@@ -99,7 +99,6 @@ func main() {
 	mux.HandleFunc("/", handlers.IndexHandler)
 	mux.HandleFunc("/artist/", handlers.ArtistHandler)
 	mux.HandleFunc("/api/search", handlers.SearchHandler)
-	mux.HandleFunc("/concerts", handlers.AllConcertsHandler)
 	mux.HandleFunc("/api/refresh-cache", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			renderError(w, http.StatusMethodNotAllowed, "Method not allowed")

@@ -40,13 +40,13 @@ async function searchArtists() {
             const card = `
                 <div class="col-md-4 col-sm-6 mb-4">
                     <div class="card h-100">
-                        <a href="/artist/${artist.ID}">
-                            <img src="${artist.Image}" class="card-img-top" alt="${artist.Name}" style="width: 240px; height: 240px; object-fit: cover;">
+                        <a href="/artist/${artist.id}">
+                            <img src="${artist.image}" class="card-img-top" alt="${artist.name}" style="width: 240px; height: 240px; object-fit: cover;" loading="lazy">
                         </a>
                         <div class="card-body">
-                            <h5 class="card-title">${artist.Name}</h5>
-                            <p class="card-text">Formed: ${artist.CreationDate}</p>
-                            <a href="/artist/${artist.ID}" class="btn btn-primary">View Details</a>
+                            <h5 class="card-title">${artist.name}</h5>
+                            <p class="card-text">Formed: ${artist.creationDate}</p>
+                            <a href="/artist/${artist.id}" class="btn btn-primary">View Details</a>
                         </div>
                     </div>
                 </div>

@@ -3,11 +3,12 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"groupie/internal/api"
-	"groupie/internal/models"
+	"groupie-tracker/internal/api"
+	"groupie-tracker/internal/models"
 	"html/template"
 	"log"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -20,43 +21,65 @@ type ErrorData struct {
 	Message    string
 }
 
-func SetTemplates(tmpl *template.Template) {
-	templates = tmpl
+// Init initializes the handlers package
+func Init() {
+	var err error
+	templates, err = template.ParseGlob("internal/templates/*.html")
+	if err != nil {
+		log.Fatalf("Failed to parse templates: %v", err)
+	}
+
+	// Preload cache
+	if err := api.RefreshCache(); err != nil {
+		log.Printf("Warning: Failed to preload cache: %v", err)
+	}
 }
 
-func IndexHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		templates.ExecuteTemplate(w, "error.html", ErrorData{
-			StatusCode: http.StatusMethodNotAllowed,
-			Message:    "Method not allowed",
-		})
+// SetupRoutes configures all routes
+func SetupRoutes() http.Handler {
+	mux := http.NewServeMux()
+
+	// Static file serving
+	mux.HandleFunc("/static/", serveStatic)
+
+	// Routes
+	mux.HandleFunc("/", IndexHandler)
+	mux.HandleFunc("/artist/", ArtistHandler)
+	mux.HandleFunc("/api/search", SearchHandler)
+	mux.HandleFunc("/api/refresh-cache", RefreshCacheHandler)
+
+	return mux
+}
+
+// serveStatic handles static file serving
+func serveStatic(w http.ResponseWriter, r *http.Request) {
+	filePath := filepath.Clean(filepath.Join("static", strings.TrimPrefix(r.URL.Path, "/static/")))
+	if !strings.HasPrefix(filePath, "static/") {
+		http.Error(w, "Invalid file path", http.StatusForbidden)
 		return
 	}
+	http.StripPrefix("/static/", http.FileServer(http.Dir("static"))).ServeHTTP(w, r)
+}
+
+// IndexHandler handles the home page
+func IndexHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
-		templates.ExecuteTemplate(w, "error.html", ErrorData{
-			StatusCode: http.StatusNotFound,
-			Message:    "Page not found",
-		})
+		http.NotFound(w, r)
 		return
 	}
 	artists, err := api.FetchArtists()
 	if err != nil {
-		templates.ExecuteTemplate(w, "error.html", ErrorData{
-			StatusCode: http.StatusInternalServerError,
-			Message:    fmt.Sprintf("Failed to fetch artists: %v", err),
-		})
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		log.Printf("Failed to fetch artists: %v", err)
 		return
 	}
-	if t := templates.Lookup("index.html"); t == nil {
-		templates.ExecuteTemplate(w, "error.html", ErrorData{
-			StatusCode: http.StatusInternalServerError,
-			Message:    "Template not found",
-		})
-		return
+	if err := templates.ExecuteTemplate(w, "index.html", artists); err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		log.Printf("Template error: %v", err)
 	}
-	templates.ExecuteTemplate(w, "index.html", artists)
 }
 
+// ArtistHandler handles artist detail pages
 func ArtistHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		templates.ExecuteTemplate(w, "error.html", ErrorData{
@@ -90,7 +113,7 @@ func ArtistHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Fetch related data, fail fast on error
-	location, err := api.FetchLocations(artist.LocationsURL)
+	location, err := api.FetchLocations(artist.Locations)
 	if err != nil {
 		templates.ExecuteTemplate(w, "error.html", ErrorData{
 			StatusCode: http.StatusInternalServerError,
@@ -98,7 +121,7 @@ func ArtistHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	date, err := api.FetchDates(artist.DatesURL)
+	date, err := api.FetchDates(artist.ConcertDates)
 	if err != nil {
 		templates.ExecuteTemplate(w, "error.html", ErrorData{
 			StatusCode: http.StatusInternalServerError,
@@ -106,7 +129,7 @@ func ArtistHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	relation, err := api.FetchRelations(artist.RelationsURL)
+	relation, err := api.FetchRelations(artist.Relations)
 	if err != nil {
 		templates.ExecuteTemplate(w, "error.html", ErrorData{
 			StatusCode: http.StatusInternalServerError,
@@ -135,6 +158,7 @@ func ArtistHandler(w http.ResponseWriter, r *http.Request) {
 	templates.ExecuteTemplate(w, "artist.html", data)
 }
 
+// SearchHandler handles search requests
 func SearchHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -164,4 +188,17 @@ func SearchHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		log.Printf("Failed to encode search results: %v", err)
 	}
+}
+
+// RefreshCacheHandler handles cache refresh requests
+func RefreshCacheHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := api.RefreshCache(); err != nil {
+		http.Error(w, "Failed to refresh cache", http.StatusInternalServerError)
+		return
+	}
+	w.Write([]byte("Cache refreshed"))
 }

@@ -3,8 +3,8 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"groupie/internal/cache"
-	"groupie/internal/models"
+	"groupie-tracker/internal/cache"
+	"groupie-tracker/internal/models"
 	"io"
 	"log"
 	"net/http"

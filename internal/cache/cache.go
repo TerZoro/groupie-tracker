@@ -1,7 +1,7 @@
 package cache
 
 import (
-	"groupie/internal/models"
+	"groupie-tracker/internal/models"
 	"sync"
 	"time"
 )

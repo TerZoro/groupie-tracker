@@ -32,24 +32,6 @@ body {
     border-radius: 8px;
 }
 
-.table-responsive {
-    margin-top: 20px;
-}
-
-.table th, .table td {
-    vertical-align: middle;
-    padding: 0.75rem;
-}
-
-.table-striped tbody tr:nth-of-type(odd) {
-    background-color: rgba(0, 0, 0, 0.05);
-}
-
-.list-group-item {
-    border: none;
-    padding: 0.5rem 1rem;
-}
-
 .btn-primary {
     background-color: #007bff;
     border-color: #007bff;
@@ -68,6 +50,62 @@ body {
 .img-fluid {
     max-width: 100%;
     height: auto;
+}
+
+/* Timeline Styles */
+.timeline {
+    position: relative;
+    padding: 20px 0;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 30px;
+    width: 4px;
+    background: #007bff;
+    border-radius: 2px;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 20px;
+    padding-left: 60px;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: 23px;
+    top: 5px;
+    width: 18px;
+    height: 18px;
+    background: #007bff;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    z-index: 1;
+}
+
+.timeline-content {
+    background: #fff;
+    padding: 15px;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.timeline-content h6 {
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+.timeline-content ul {
+    margin: 0;
+    padding: 0;
+}
+
+.timeline-content ul li {
+    margin-bottom: 5px;
 }
 
 @media (max-width: 576px) {
@@ -93,11 +131,17 @@ body {
         width: 100%;
     }
 
-    .table {
-        font-size: 0.9rem;
+    .timeline::before {
+        left: 15px;
     }
 
-    .table th, .table td {
-        padding: 0.5rem;
+    .timeline-item {
+        padding-left: 40px;
+    }
+
+    .timeline-marker {
+        left: 8px;
+        width: 14px;
+        height: 14px;
     }
 }

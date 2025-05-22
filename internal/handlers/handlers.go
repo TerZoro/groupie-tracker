@@ -3,14 +3,18 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"groupie-tracker/internal/api"
-	"groupie-tracker/internal/models"
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
+
+	"groupie-tracker/internal/api"
+	"groupie-tracker/internal/models"
 )
 
 var templates *template.Template
@@ -24,15 +28,38 @@ type ErrorData struct {
 // Init initializes the handlers package
 func Init() {
 	var err error
-	templates, err = template.ParseGlob("internal/templates/*.html")
+	templates = template.New("").Funcs(template.FuncMap{
+		"replaceUnderscores": func(s string) string {
+			// Convert "playa_del_carmen-mexico" to "Playa Del Carmen, Mexico"
+			parts := strings.Split(strings.ReplaceAll(s, "_", " "), "-")
+			for i, part := range parts {
+				if part != "" {
+					parts[i] = strings.ToUpper(string(part[0])) + part[1:]
+				}
+			}
+			return strings.Join(parts, ", ")
+		},
+		"sortDates": func(dates []string) []string {
+			// Create a copy to avoid modifying the original
+			sorted := make([]string, len(dates))
+			copy(sorted, dates)
+			// Sort dates chronologically
+			sort.Slice(sorted, func(i, j int) bool {
+				ti, err1 := time.Parse("2006-01-02", sorted[i])
+				tj, err2 := time.Parse("2006-01-02", sorted[j])
+				if err1 != nil || err2 != nil {
+					return sorted[i] < sorted[j] // Fallback to string comparison
+				}
+				return ti.Before(tj)
+			})
+			return sorted
+		},
+	})
+	templates, err = templates.ParseGlob("internal/templates/*.html")
 	if err != nil {
 		log.Fatalf("Failed to parse templates: %v", err)
 	}
-
-	// Preload cache
-	if err := api.RefreshCache(); err != nil {
-		log.Printf("Warning: Failed to preload cache: %v", err)
-	}
+	log.Println("Templates loaded successfully")
 }
 
 // SetupRoutes configures all routes
@@ -55,26 +82,64 @@ func SetupRoutes() http.Handler {
 func serveStatic(w http.ResponseWriter, r *http.Request) {
 	filePath := filepath.Clean(filepath.Join("static", strings.TrimPrefix(r.URL.Path, "/static/")))
 	if !strings.HasPrefix(filePath, "static/") {
-		http.Error(w, "Invalid file path", http.StatusForbidden)
+		templates.ExecuteTemplate(w, "error.html", ErrorData{
+			StatusCode: http.StatusForbidden,
+			Message:    "Invalid file path",
+		})
+		return
+	}
+	if isDirectory(filePath) {
+		templates.ExecuteTemplate(w, "error.html", ErrorData{
+			StatusCode: http.StatusForbidden,
+			Message:    "Access to directories is forbidden",
+		})
 		return
 	}
 	http.StripPrefix("/static/", http.FileServer(http.Dir("static"))).ServeHTTP(w, r)
 }
 
+// isDirectory checks if the path is a directory
+func isDirectory(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
 // IndexHandler handles the home page
 func IndexHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		templates.ExecuteTemplate(w, "error.html", ErrorData{
+			StatusCode: http.StatusMethodNotAllowed,
+			Message:    "Method not allowed",
+		})
+		return
+	}
 	if r.URL.Path != "/" {
-		http.NotFound(w, r)
+		templates.ExecuteTemplate(w, "error.html", ErrorData{
+			StatusCode: http.StatusNotFound,
+			Message:    "Page not found",
+		})
 		return
 	}
 	artists, err := api.FetchArtists()
 	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		log.Printf("Failed to fetch artists: %v", err)
+		templates.ExecuteTemplate(w, "error.html", ErrorData{
+			StatusCode: http.StatusInternalServerError,
+			Message:    fmt.Sprintf("Failed to fetch artists: %v", err),
+		})
+		return
+	}
+	if t := templates.Lookup("index.html"); t == nil {
+		templates.ExecuteTemplate(w, "error.html", ErrorData{
+			StatusCode: http.StatusInternalServerError,
+			Message:    "Template not found",
+		})
 		return
 	}
 	if err := templates.ExecuteTemplate(w, "index.html", artists); err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		templates.ExecuteTemplate(w, "error.html", ErrorData{
+			StatusCode: http.StatusInternalServerError,
+			Message:    "Template rendering error",
+		})
 		log.Printf("Template error: %v", err)
 	}
 }
@@ -155,7 +220,13 @@ func ArtistHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	templates.ExecuteTemplate(w, "artist.html", data)
+	if err := templates.ExecuteTemplate(w, "artist.html", data); err != nil {
+		templates.ExecuteTemplate(w, "error.html", ErrorData{
+			StatusCode: http.StatusInternalServerError,
+			Message:    "Template rendering error",
+		})
+		log.Printf("Template error: %v", err)
+	}
 }
 
 // SearchHandler handles search requests

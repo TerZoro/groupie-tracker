@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Artist.Name}} - Groupie Trackers</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body>
@@ -34,10 +35,27 @@
             <div class="col-md-8">
                 <div class="card">
                     <div class="card-body">
-                        <h5 class="card-title">Artist Details</h5>
-                        <p><strong>Members:</strong> {{if .Artist.Members}}{{range $i, $member := .Artist.Members}}{{if $i}}, {{end}}{{$member}}{{end}}{{else}}None{{end}}</p>
-                        <p><strong>Creation Date:</strong> {{.Artist.CreationDate}}</p>
-                        <p><strong>First Album:</strong> {{if .Artist.FirstAlbum}}{{.Artist.FirstAlbum}}{{else}}Unknown{{end}}</p>
+                        <h5 class="card-title"><i class="fas fa-info-circle me-2"></i>Artist Details</h5>
+                        <div class="mb-3">
+                            <strong><i class="fas fa-users me-2"></i>Members:</strong>
+                            {{if .Artist.Members}}
+                                <div class="d-flex flex-wrap gap-2 mt-2">
+                                    {{range .Artist.Members}}
+                                        <span class="badge bg-primary">{{.}}</span>
+                                    {{end}}
+                                </div>
+                            {{else}}
+                                <span class="text-muted">None</span>
+                            {{end}}
+                        </div>
+                        <div class="mb-3">
+                            <strong><i class="fas fa-calendar-alt me-2"></i>Creation Date:</strong>
+                            <span class="badge bg-secondary">{{.Artist.CreationDate}}</span>
+                        </div>
+                        <div>
+                            <strong><i class="fas fa-record-vinyl me-2"></i>First Album:</strong>
+                            <span class="badge bg-secondary">{{if .Artist.FirstAlbum}}{{.Artist.FirstAlbum}}{{else}}Unknown{{end}}</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -47,7 +65,7 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-body">
-                        <h5 class="card-title">Concert Schedule</h5>
+                        <h5 class="card-title"><i class="fas fa-map-marker-alt me-2"></i>Concert Schedule</h5>
                         {{if .Relation.DatesLocations}}
                             <div class="timeline">
                                 {{range $location, $dates := .Relation.DatesLocations}}

@@ -43,14 +43,14 @@ func Init() {
 			// Create a copy to avoid modifying the original
 			sorted := make([]string, len(dates))
 			copy(sorted, dates)
-			// Sort dates chronologically
+			// Sort dates in descending order (newest first)
 			sort.Slice(sorted, func(i, j int) bool {
 				ti, err1 := time.Parse("2006-01-02", sorted[i])
 				tj, err2 := time.Parse("2006-01-02", sorted[j])
 				if err1 != nil || err2 != nil {
-					return sorted[i] < sorted[j] // Fallback to string comparison
+					return sorted[i] > sorted[j] // Fallback to string comparison
 				}
-				return ti.Before(tj)
+				return ti.After(tj) // Newest date first
 			})
 			return sorted
 		},

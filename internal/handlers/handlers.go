@@ -25,12 +25,17 @@ type ErrorData struct {
 	Message    string
 }
 
+// LocationDatePair represents a location and its dates for sorting
+type LocationDatePair struct {
+	Location string
+	Dates    []string
+}
+
 // Init initializes the handlers package
 func Init() {
 	var err error
 	templates = template.New("").Funcs(template.FuncMap{
 		"replaceUnderscores": func(s string) string {
-			// Convert "playa_del_carmen-mexico" to "Playa Del Carmen, Mexico"
 			parts := strings.Split(strings.ReplaceAll(s, "_", " "), "-")
 			for i, part := range parts {
 				if part != "" {
@@ -40,19 +45,54 @@ func Init() {
 			return strings.Join(parts, ", ")
 		},
 		"sortDates": func(dates []string) []string {
-			// Create a copy to avoid modifying the original
 			sorted := make([]string, len(dates))
 			copy(sorted, dates)
-			// Sort dates in descending order (newest first)
 			sort.Slice(sorted, func(i, j int) bool {
 				ti, err1 := time.Parse("2006-01-02", sorted[i])
 				tj, err2 := time.Parse("2006-01-02", sorted[j])
 				if err1 != nil || err2 != nil {
-					return sorted[i] > sorted[j] // Fallback to string comparison
+					log.Printf("sortDates: invalid date %s or %s", sorted[i], sorted[j])
+					return sorted[i] > sorted[j]
 				}
-				return ti.After(tj) // Newest date first
+				return ti.After(tj)
 			})
 			return sorted
+		},
+		"sortLocationsByDate": func(datesLocations map[string][]string) []LocationDatePair {
+			pairs := make([]LocationDatePair, 0, len(datesLocations))
+			for location, dates := range datesLocations {
+				if len(dates) == 0 {
+					log.Printf("sortLocationsByDate: skipping empty dates for %s", location)
+					continue
+				}
+				pairs = append(pairs, LocationDatePair{
+					Location: location,
+					Dates:    dates,
+				})
+			}
+			log.Printf("sortLocationsByDate: processing %d locations", len(pairs))
+			sort.SliceStable(pairs, func(i, j int) bool {
+				maxDateI := getMostRecentDate(pairs[i].Dates)
+				maxDateJ := getMostRecentDate(pairs[j].Dates)
+				ti, err1 := time.Parse("2006-01-02", maxDateI)
+				tj, err2 := time.Parse("2006-01-02", maxDateJ)
+				if err1 != nil || maxDateI == "" {
+					if err2 != nil || maxDateJ == "" {
+						log.Printf("sortLocationsByDate: both dates invalid %s, %s", maxDateI, maxDateJ)
+						return pairs[i].Location > pairs[j].Location
+					}
+					log.Printf("sortLocationsByDate: invalid date %s for %s", maxDateI, pairs[i].Location)
+					return false
+				}
+				if err2 != nil || maxDateJ == "" {
+					log.Printf("sortLocationsByDate: invalid date %s for %s", maxDateJ, pairs[j].Location)
+					return true
+				}
+				log.Printf("sortLocationsByDate: comparing %s (%s) vs %s (%s)", pairs[i].Location, maxDateI, pairs[j].Location, maxDateJ)
+				return ti.After(tj)
+			})
+			log.Printf("sortLocationsByDate: sorted %d locations", len(pairs))
+			return pairs
 		},
 	})
 	templates, err = templates.ParseGlob("internal/templates/*.html")
@@ -60,6 +100,24 @@ func Init() {
 		log.Fatalf("Failed to parse templates: %v", err)
 	}
 	log.Println("Templates loaded successfully")
+}
+
+// getMostRecentDate returns the most recent date from a slice of dates
+func getMostRecentDate(dates []string) string {
+	var maxDate string
+	var maxTime time.Time
+	for _, d := range dates {
+		t, err := time.Parse("2006-01-02", d)
+		if err != nil {
+			log.Printf("getMostRecentDate: invalid date %s", d)
+			continue
+		}
+		if maxDate == "" || t.After(maxTime) {
+			maxDate = d
+			maxTime = t
+		}
+	}
+	return maxDate
 }
 
 // SetupRoutes configures all routes
@@ -202,6 +260,7 @@ func ArtistHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	log.Printf("Artist %d: %d locations in DatesLocations", artist.ID, len(relation.DatesLocations))
 	data := struct {
 		Artist   models.Artist
 		Location models.Location

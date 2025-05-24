@@ -30,10 +30,12 @@
 
         <div class="row">
             <div class="col-md-4">
-                <img src="{{.Artist.Image}}" class="img-fluid rounded" alt="{{.Artist.Name}}" style="width: 240px; height: 240px; object-fit: cover;">
+                <div class="card h-100">
+                    <img src="{{.Artist.Image}}" class="card-img-top img-fluid rounded" alt="{{.Artist.Name}}">
+                </div>
             </div>
             <div class="col-md-8">
-                <div class="card">
+                <div class="card h-100">
                     <div class="card-body">
                         <h5 class="card-title"><i class="fas fa-info-circle me-2"></i>Artist Details</h5>
                         <div class="mb-3">
@@ -68,14 +70,14 @@
                         <h5 class="card-title"><i class="fas fa-map-marker-alt me-2"></i>Concert Schedule</h5>
                         {{if .Relation.DatesLocations}}
                             <div class="timeline">
-                                {{range $location, $dates := .Relation.DatesLocations}}
+                                {{range .Relation.DatesLocations | sortLocationsByDate}}
                                     <div class="timeline-item">
                                         <div class="timeline-marker"></div>
                                         <div class="timeline-content">
-                                            <h6 class="text-primary">{{$location | replaceUnderscores}}</h6>
+                                            <h6 class="text-primary">{{.Location | replaceUnderscores}}</h6>
                                             <ul class="list-unstyled">
-                                                {{range $date := sortDates $dates}}
-                                                    <li>{{$date}}</li>
+                                                {{range .Dates | sortDates}}
+                                                    <li>{{.}}</li>
                                                 {{end}}
                                             </ul>
                                         </div>

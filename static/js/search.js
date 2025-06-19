@@ -32,13 +32,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add input event listener for suggestions
     searchInput.addEventListener('input', handleSearchInput);
     
-    // Add search button click handler
-    if (searchButton) {
-        searchButton.addEventListener('click', performSearch);
-    }
-    
-    // Add enter key handler
-    searchInput.addEventListener('keypress', (e) => {
+    // Remove old search button click handler binding here
+    // Add enter key handler (use keydown instead of keypress)
+    searchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
             performSearch();
@@ -62,6 +58,9 @@ document.addEventListener('DOMContentLoaded', () => {
         button.innerHTML = '🔍';
         button.type = 'button';
         searchContainer.appendChild(button);
+
+        // Attach the click handler here!
+        button.addEventListener('click', performSearch);
     }
 
     function fetchArtistsFromPage() {
@@ -198,4 +197,4 @@ async function checkApiAvailability() {
     } catch (error) {
         return false;
     }
-} 
+}

@@ -36,8 +36,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add enter key handler (use keydown instead of keypress)
     searchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
+            const q = encodeURIComponent(searchInput.value.trim());
+            if (q) window.location = `/search?q=${q}`;
             e.preventDefault();
-            performSearch();
         }
     });
     

@@ -11,154 +11,91 @@ import (
 	"groupie-tracker/internal/models"
 )
 
-var templates *template.Template
+var tpl *template.Template
 
-// Init loads the HTML templates
-func Init() {
+// InitTemplates loads your HTML only once.
+func InitTemplates(pattern string) {
 	var err error
-	templates, err = template.ParseGlob("internal/templates/*.html")
+	tpl, err = template.ParseGlob(pattern)
 	if err != nil {
-		log.Fatal("Failed to load templates:", err)
+		log.Fatalf("failed to parse templates %q: %v", pattern, err)
 	}
-	log.Println("Templates loaded successfully")
 }
 
-// HomeHandler shows the main page with all artists
-func HomeHandler(w http.ResponseWriter, r *http.Request) {
+// render is your single place to exec a template or error out.
+func render(w http.ResponseWriter, name string, data interface{}) {
+	if err := tpl.ExecuteTemplate(w, name, data); err != nil {
+		http.Error(w, "template error", 500)
+		log.Printf("template %s exec error: %v", name, err)
+	}
+}
+
+// Home shows all artists.
+func Home(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
 	}
-
 	artists, err := api.FetchArtists()
 	if err != nil {
-		http.Error(w, "Failed to load artists", 500)
-		log.Println("Error fetching artists:", err)
+		http.Error(w, "unable to fetch artists", 500)
+		log.Println("FetchArtists:", err)
 		return
 	}
-
-	err = templates.ExecuteTemplate(w, "index.html", artists)
-	if err != nil {
-		http.Error(w, "Error loading page", 500)
-		log.Println("Template error:", err)
-	}
+	render(w, "index.html", artists)
 }
 
-// ArtistHandler shows details for a specific artist
-func ArtistHandler(w http.ResponseWriter, r *http.Request) {
-	// Get artist ID from URL
+// Artist shows one artist's detail.
+func Artist(w http.ResponseWriter, r *http.Request) {
 	idStr := strings.TrimPrefix(r.URL.Path, "/artist/")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, "Invalid artist ID", 400)
+		http.Error(w, "invalid artist ID", 400)
 		return
 	}
-
-	// Get all artists and find the one we need
 	artists, err := api.FetchArtists()
 	if err != nil {
-		http.Error(w, "Failed to load artists", 500)
+		http.Error(w, "unable to fetch artists", 500)
 		return
 	}
-
-	var artist models.Artist
-	found := false
-	for _, a := range artists {
-		if a.ID == id {
-			artist = a
-			found = true
+	var a models.Artist
+	for _, art := range artists {
+		if art.ID == id {
+			a = art
 			break
 		}
 	}
-
-	if !found {
+	if a.ID == 0 {
 		http.NotFound(w, r)
 		return
 	}
-
-	// Get additional data
-	location, err := api.FetchLocation(artist.Locations)
-	if err != nil {
-		log.Println("Error fetching location:", err)
-	}
-
-	relation, err := api.FetchRelation(artist.Relations)
-	if err != nil {
-		log.Println("Error fetching relation:", err)
-	}
-
-	// Prepare data for template
-	data := struct {
-		Artist   models.Artist
-		Location models.Location
-		Relation models.Relation
-	}{
-		Artist:   artist,
-		Location: location,
-		Relation: relation,
-	}
-
-	err = templates.ExecuteTemplate(w, "artist.html", data)
-	if err != nil {
-		http.Error(w, "Error loading page", 500)
-		log.Println("Template error:", err)
-	}
+	loc, _ := api.FetchLocation(a.Locations)
+	rel, _ := api.FetchRelation(a.Relations)
+	render(w, "artist.html", struct {
+		models.Artist
+		models.Location
+		models.Relation
+	}{a, loc, rel})
 }
 
-// SearchHandler handles search requests
-func SearchHandler(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query().Get("q")
-	if query == "" {
+// Search filters artists by query "q".
+func Search(w http.ResponseWriter, r *http.Request) {
+	q := strings.ToLower(r.URL.Query().Get("q"))
+	if q == "" {
 		http.Redirect(w, r, "/", 302)
 		return
 	}
-
 	artists, err := api.FetchArtists()
 	if err != nil {
-		http.Error(w, "Failed to load artists", 500)
+		http.Error(w, "unable to fetch artists", 500)
 		return
 	}
-
-	// Simple search
-	var results []models.Artist
-	searchQuery := strings.ToLower(query)
-
-	for _, artist := range artists {
-		// Search in artist name
-		if strings.Contains(strings.ToLower(artist.Name), searchQuery) {
-			results = append(results, artist)
-			continue
-		}
-
-		// Search in members
-		for _, member := range artist.Members {
-			if strings.Contains(strings.ToLower(member), searchQuery) {
-				results = append(results, artist)
-				break
-			}
-		}
-
-		// Search in creation date
-		if strings.Contains(strconv.Itoa(artist.CreationDate), searchQuery) {
-			results = append(results, artist)
-			continue
-		}
-
-		// Search in first album
-		if strings.Contains(strings.ToLower(artist.FirstAlbum), searchQuery) {
-			results = append(results, artist)
-			continue
+	var out []models.Artist
+	for _, art := range artists {
+		if strings.Contains(strings.ToLower(art.Name), q) ||
+			strings.Contains(strings.ToLower(art.FirstAlbum), q) {
+			out = append(out, art)
 		}
 	}
-
-	err = templates.ExecuteTemplate(w, "index.html", results)
-	if err != nil {
-		http.Error(w, "Error loading page", 500)
-		log.Println("Template error:", err)
-	}
-}
-
-// StaticHandler serves static files
-func StaticHandler(w http.ResponseWriter, r *http.Request) {
-	http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))).ServeHTTP(w, r)
+	render(w, "index.html", out)
 }

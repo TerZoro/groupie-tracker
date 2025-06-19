@@ -1,0 +1,25 @@
+{{define "index.html"}}
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Groupie Tracker</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/bootstrap.min.css">
+    <script src="/static/js/search.js" defer></script>
+  </head>
+  <body>
+    <nav>
+      <input id="searchInput" placeholder="Search artists…">
+    </nav>
+    <div class="container">
+      {{range .}}
+        <div class="card">
+          <h5>{{.Name}}</h5>
+          <a href="/artist/{{.ID}}">View Details</a>
+        </div>
+      {{end}}
+    </div>
+  </body>
+</html>
+{{end}}

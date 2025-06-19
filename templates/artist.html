@@ -1,0 +1,43 @@
+{{define "artist.html"}}
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Artist.Name}} - Groupie Tracker</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/bootstrap.min.css">
+  </head>
+  <body>
+    <nav>
+      <a href="/">Home</a>
+    </nav>
+    <div class="container">
+      <h1>{{.Artist.Name}}</h1>
+      <div>
+        <strong>Members:</strong>
+        {{range .Artist.Members}}{{.}}, {{end}}
+      </div>
+      <div><strong>Creation Date:</strong> {{.Artist.CreationDate}}</div>
+      <div><strong>First Album:</strong> {{.Artist.FirstAlbum}}</div>
+      <div>
+        <h5>Concert Schedule</h5>
+        {{if .Relation.DatesLocations}}
+          {{range $location, $dates := .Relation.DatesLocations}}
+            <div>
+              <strong>{{$location}}</strong>
+              <ul>
+                {{range $dates}}
+                  <li>{{.}}</li>
+                {{end}}
+              </ul>
+            </div>
+          {{end}}
+        {{else}}
+          <p>No concert schedule available.</p>
+        {{end}}
+      </div>
+      <a href="/">Back to Home</a>
+    </div>
+  </body>
+</html>
+{{end}}

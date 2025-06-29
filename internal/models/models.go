@@ -1,6 +1,9 @@
 package models
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Artist represents a musical artist or band
 type Artist struct {
@@ -13,6 +16,8 @@ type Artist struct {
 	Locations    string   `json:"locations"`
 	ConcertDates string   `json:"concertDates"`
 	Relations    string   `json:"relations"`
+	// Additional fields for search
+	LocationList []string `json:"-"` // Will be populated from relations
 }
 
 // Validate ensures the artist data is valid
@@ -24,6 +29,35 @@ func (a Artist) Validate() error {
 		return fmt.Errorf("artist name cannot be empty")
 	}
 	return nil
+}
+
+// GetSearchableText returns all searchable text for this artist
+func (a Artist) GetSearchableText() string {
+	texts := []string{
+		a.Name,
+		strings.Join(a.Members, " "),
+		a.FirstAlbum,
+		fmt.Sprintf("%d", a.CreationDate),
+		strings.Join(a.LocationList, " "),
+	}
+	return strings.ToLower(strings.Join(texts, " "))
+}
+
+// CleanLocationName removes slashes and formats location names properly
+func CleanLocationName(location string) string {
+	// Remove slashes and replace with spaces
+	cleaned := strings.ReplaceAll(location, "-", " ")
+	cleaned = strings.ReplaceAll(cleaned, "_", " ")
+
+	// Capitalize words
+	words := strings.Fields(cleaned)
+	for i, word := range words {
+		if len(word) > 0 {
+			words[i] = strings.ToUpper(word[:1]) + strings.ToLower(word[1:])
+		}
+	}
+
+	return strings.Join(words, " ")
 }
 
 // Location represents a concert location

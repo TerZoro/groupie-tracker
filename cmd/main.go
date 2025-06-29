@@ -48,6 +48,10 @@ func main() {
 	mux.HandleFunc("/search", handlers.SearchHandler)
 	mux.HandleFunc("/static/", handlers.StaticHandler)
 	mux.HandleFunc("/api/artists", handlers.APIArtistsHandler)
+	mux.HandleFunc("/api/search/locations", handlers.APILocationSearchHandler)
+	mux.HandleFunc("/api/suggestions/locations", handlers.APILocationSuggestionsHandler)
+	mux.HandleFunc("/api/cache/status", handlers.APICacheStatusHandler)
+	mux.HandleFunc("/api/cache/clear", handlers.APIClearCacheHandler)
 
 	// Get port from environment, default to 8080
 	port := os.Getenv("PORT")

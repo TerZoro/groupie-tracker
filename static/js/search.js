@@ -50,11 +50,29 @@ class SearchManager {
   async loadArtists() {
     try {
       this.showLoading('Loading artists...');
+      
+      // Check cache first
+      if (searchCache.artists.length > 0 && searchCache.lastUpdated) {
+        const cacheAge = Date.now() - searchCache.lastUpdated;
+        if (cacheAge < 5 * 60 * 1000) { // 5 minutes
+          this.allArtists = [...searchCache.artists];
+          this.filteredArtists = [...this.allArtists];
+          this.renderArtists();
+          this.hideLoading();
+          return;
+        }
+      }
+      
       const response = await fetch('/api/artists');
       if (!response.ok) throw new Error('Failed to fetch artists');
       
       this.allArtists = await response.json();
       this.filteredArtists = [...this.allArtists];
+      
+      // Update cache
+      searchCache.artists = [...this.allArtists];
+      searchCache.lastUpdated = Date.now();
+      
       this.renderArtists();
       this.hideLoading();
     } catch (error) {
@@ -83,6 +101,8 @@ class SearchManager {
     }
 
     const queryLower = query.toLowerCase().trim();
+    
+    // First, search in basic fields (fast)
     this.filteredArtists = this.allArtists.filter(artist => {
       return (
         artist.name.toLowerCase().includes(queryLower) ||
@@ -94,6 +114,32 @@ class SearchManager {
 
     this.renderArtists();
     this.showSuggestions(query);
+    
+    // If no results found, try location search
+    if (this.filteredArtists.length === 0) {
+      this.performLocationSearch(query);
+    }
+  }
+
+  async performLocationSearch(query) {
+    try {
+      this.showLoading('Searching locations...');
+      const response = await fetch(`/api/search/locations?q=${encodeURIComponent(query)}`);
+      if (!response.ok) throw new Error('Location search failed');
+      
+      const locationResults = await response.json();
+      this.filteredArtists = locationResults;
+      this.renderArtists();
+      this.hideLoading();
+      
+      if (locationResults.length > 0) {
+        this.showAlert(`Found ${locationResults.length} artist(s) performing in locations matching "${query}"`, 'success');
+      }
+    } catch (error) {
+      console.error('Location search error:', error);
+      this.hideLoading();
+      this.showAlert('Location search failed. Please try again.', 'warning');
+    }
   }
 
   showSuggestions(query = '') {
@@ -135,9 +181,29 @@ class SearchManager {
       }
     });
 
+    // Add location suggestions (async)
+    this.addLocationSuggestions(query, results);
+
     // Deduplicate and limit to 5
     const unique = [...new Map(results.map(r => [r.text + r.type, r])).values()];
     return unique.slice(0, 5);
+  }
+
+  async addLocationSuggestions(query, results) {
+    try {
+      const response = await fetch(`/api/suggestions/locations?q=${encodeURIComponent(query)}&limit=3`);
+      if (response.ok) {
+        const locationSuggestions = await response.json();
+        locationSuggestions.forEach(location => {
+          results.push({ text: location, type: 'location' });
+        });
+        
+        // Re-render suggestions with locations
+        this.renderSuggestions(results.slice(0, 5));
+      }
+    } catch (error) {
+      console.error('Error fetching location suggestions:', error);
+    }
   }
 
   renderSuggestions(suggestions) {
@@ -198,45 +264,51 @@ class SearchManager {
   }
 
   highlightSuggestion(suggestions) {
-    suggestions.forEach((li, index) => {
-      li.style.backgroundColor = index === this.currentIndex ? 'var(--light)' : '';
+    suggestions.forEach((suggestion, index) => {
+      if (index === this.currentIndex) {
+        suggestion.classList.add('highlighted');
+      } else {
+        suggestion.classList.remove('highlighted');
+      }
     });
   }
 
   renderArtists() {
+    if (!this.artistList) return;
+    
+    this.artistList.innerHTML = '';
+    
     if (this.filteredArtists.length === 0) {
       this.artistList.innerHTML = `
-        <div style="display: flex; justify-content: center; align-items: center; min-height: 400px;">
-          <div class="alert alert-warning" style="margin: 0;">
-            No artists found matching your search.
-          </div>
+        <div class="no-results">
+          <p>No artists found matching your search.</p>
+          <button class="btn btn-secondary" onclick="searchManager.clearFilters()">Clear Search</button>
         </div>
       `;
       return;
     }
-
-    // Show all results (removed the 10-result limit)
-    let html = '';
+    
     this.filteredArtists.forEach(artist => {
-      html += `
-        <div class="artist-card">
-          <a href="/artist/${artist.id}">
-            <img src="${artist.image}" class="artist-image" alt="${artist.name}">
-          </a>
-          <div class="card-body">
-            <h5 class="card-title">${artist.name}</h5>
-            <p class="card-text">Formed: ${artist.creationDate}</p>
-            <a href="/artist/${artist.id}" class="btn btn-primary">View Details</a>
-          </div>
+      const artistCard = document.createElement('div');
+      artistCard.className = 'artist-card';
+      artistCard.innerHTML = `
+        <img src="${artist.image}" alt="${artist.name}" class="artist-image">
+        <div class="card-body">
+          <h5 class="card-title">${artist.name}</h5>
+          <p class="card-text">
+            <strong>Members:</strong> ${artist.members.join(', ')}<br>
+            <strong>Creation Date:</strong> ${artist.creationDate}<br>
+            <strong>First Album:</strong> ${artist.firstAlbum || 'Unknown'}
+          </p>
+          <button class="btn btn-primary" onclick="goToArtist(${artist.id})">View Details</button>
         </div>
       `;
+      this.artistList.appendChild(artistCard);
     });
-
-    this.artistList.innerHTML = html;
   }
 
   showMore() {
-    // Removed - not needed anymore
+    // Implementation for showing more results if needed
   }
 
   clearFilters() {
@@ -247,81 +319,78 @@ class SearchManager {
   }
 
   showLoading(message) {
-    this.artistList.innerHTML = `
-      <div class="loading" style="display: flex; justify-content: center; align-items: center; min-height: 400px;">
-        <div style="text-align: center;">
-          <div class="spinner"></div>
-          <p>${message}</p>
+    if (this.alertContainer) {
+      this.alertContainer.innerHTML = `
+        <div class="alert alert-info">
+          <div class="loading">
+            <div class="spinner"></div>
+            <span>${message}</span>
+          </div>
         </div>
-      </div>
-    `;
+      `;
+    }
   }
 
   hideLoading() {
-    // Loading is hidden when renderArtists is called
+    if (this.alertContainer) {
+      this.alertContainer.innerHTML = '';
+    }
   }
 
   showError(message, retryCallback) {
-    this.alertContainer.innerHTML = `
-      <div class="alert alert-danger" style="margin: var(--spacing-md) auto; text-align: center;">
-        ${message}
-        ${retryCallback ? '<button class="btn btn-danger" onclick="this.parentElement.remove(); searchManager.loadArtists()">Retry</button>' : ''}
-      </div>
-    `;
+    if (this.alertContainer) {
+      this.alertContainer.innerHTML = `
+        <div class="alert alert-danger">
+          <p>${message}</p>
+          ${retryCallback ? `<button class="btn btn-secondary" onclick="searchManager.loadArtists()">Retry</button>` : ''}
+        </div>
+      `;
+    }
   }
 }
 
-// Initialize search when DOM is loaded
+// Initialize search manager
 let searchManager;
+
 document.addEventListener('DOMContentLoaded', () => {
   searchManager = new SearchManager();
 });
 
-// Global function for suggestion clicks
+// Utility functions
 function goToArtist(artistId) {
-    window.location.href = `/artist/${artistId}`;
+  window.location.href = `/artist/${artistId}`;
 }
 
-// Fetch artists data
 async function fetchArtists() {
-    try {
-        const response = await fetch('/api/artists');
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        if (!Array.isArray(data)) {
-            throw new Error('Invalid data format received');
-        }
-        searchCache.artists = data;
-        searchCache.lastUpdated = Date.now();
-    } catch (error) {
-        console.error('Error fetching artists:', error);
-        showAlert('Failed to load artists data. Please refresh the page.', 'danger');
-        // Retry after 5 seconds
-        setTimeout(fetchArtists, 5000);
-    }
+  try {
+    const response = await fetch('/api/artists');
+    if (!response.ok) throw new Error('Failed to fetch artists');
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching artists:', error);
+    return [];
+  }
 }
 
-// Show alert message
 function showAlert(message, type = 'info') {
-    const alertContainer = document.getElementById('alertContainer');
-    const alert = document.createElement('div');
-    alert.className = `alert alert-${type} alert-dismissible fade show`;
-    alert.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  const alertContainer = document.getElementById('alertContainer');
+  if (alertContainer) {
+    alertContainer.innerHTML = `
+      <div class="alert alert-${type}">
+        <p>${message}</p>
+      </div>
     `;
-    alertContainer.appendChild(alert);
-    setTimeout(() => alert.remove(), 5000);
+  }
 }
 
-// Add a function to check if the API is available
 async function checkApiAvailability() {
-    try {
-        const response = await fetch('/api/artists');
-        return response.ok;
-    } catch (error) {
-        return false;
+  try {
+    const response = await fetch('/api/cache/status');
+    if (response.ok) {
+      const status = await response.json();
+      console.log('Cache status:', status);
     }
+  } catch (error) {
+    console.error('Error checking cache status:', error);
+  }
 }

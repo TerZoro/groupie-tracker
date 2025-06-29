@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"html/template"
 	"log"
 	"net/http"
@@ -26,20 +27,20 @@ func Init() {
 // HomeHandler shows the main page with all artists
 func HomeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
-		http.NotFound(w, r)
+		renderError(w, "Page Not Found", "The page you're looking for doesn't exist.", 404)
 		return
 	}
 
 	artists, err := api.FetchArtists()
 	if err != nil {
-		http.Error(w, "Failed to load artists", 500)
+		renderError(w, "Server Error", "Failed to load artists. Please try again later.", 500)
 		log.Println("Error fetching artists:", err)
 		return
 	}
 
 	err = templates.ExecuteTemplate(w, "index.html", artists)
 	if err != nil {
-		http.Error(w, "Error loading page", 500)
+		renderError(w, "Server Error", "Error loading page. Please try again later.", 500)
 		log.Println("Template error:", err)
 	}
 }
@@ -50,14 +51,14 @@ func ArtistHandler(w http.ResponseWriter, r *http.Request) {
 	idStr := strings.TrimPrefix(r.URL.Path, "/artist/")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, "Invalid artist ID", 400)
+		renderError(w, "Invalid Artist ID", "The artist ID you provided is not valid. Please try again.", 400)
 		return
 	}
 
 	// Get all artists and find the one we need
 	artists, err := api.FetchArtists()
 	if err != nil {
-		http.Error(w, "Failed to load artists", 500)
+		renderError(w, "Server Error", "Failed to load artists. Please try again later.", 500)
 		return
 	}
 
@@ -72,7 +73,7 @@ func ArtistHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !found {
-		http.NotFound(w, r)
+		renderError(w, "Artist Not Found", "The artist you're looking for doesn't exist. Please check the URL and try again.", 404)
 		return
 	}
 
@@ -100,8 +101,28 @@ func ArtistHandler(w http.ResponseWriter, r *http.Request) {
 
 	err = templates.ExecuteTemplate(w, "artist.html", data)
 	if err != nil {
-		http.Error(w, "Error loading page", 500)
+		renderError(w, "Server Error", "Error loading artist page. Please try again later.", 500)
 		log.Println("Template error:", err)
+	}
+}
+
+// renderError renders the error template with proper styling
+func renderError(w http.ResponseWriter, title, message string, statusCode int) {
+	w.WriteHeader(statusCode)
+
+	data := struct {
+		Title   string
+		Message string
+	}{
+		Title:   title,
+		Message: message,
+	}
+
+	err := templates.ExecuteTemplate(w, "error.html", data)
+	if err != nil {
+		// Fallback to plain text if template fails
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte(title + ": " + message))
 	}
 }
 
@@ -115,7 +136,7 @@ func SearchHandler(w http.ResponseWriter, r *http.Request) {
 
 	artists, err := api.FetchArtists()
 	if err != nil {
-		http.Error(w, "Failed to load artists", 500)
+		renderError(w, "Server Error", "Failed to load artists. Please try again later.", 500)
 		return
 	}
 
@@ -153,7 +174,7 @@ func SearchHandler(w http.ResponseWriter, r *http.Request) {
 
 	err = templates.ExecuteTemplate(w, "index.html", results)
 	if err != nil {
-		http.Error(w, "Error loading page", 500)
+		renderError(w, "Server Error", "Error loading search results. Please try again later.", 500)
 		log.Println("Template error:", err)
 	}
 }
@@ -161,4 +182,26 @@ func SearchHandler(w http.ResponseWriter, r *http.Request) {
 // StaticHandler serves static files
 func StaticHandler(w http.ResponseWriter, r *http.Request) {
 	http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))).ServeHTTP(w, r)
+}
+
+// APIArtistsHandler serves artists data as JSON for frontend
+func APIArtistsHandler(w http.ResponseWriter, r *http.Request) {
+	artists, err := api.FetchArtists()
+	if err != nil {
+		http.Error(w, "Failed to load artists", 500)
+		log.Println("Error fetching artists:", err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=300") // Cache for 5 minutes
+
+	// Convert to JSON and send
+	jsonData, err := json.Marshal(artists)
+	if err != nil {
+		http.Error(w, "Error encoding data", 500)
+		return
+	}
+
+	w.Write(jsonData)
 }

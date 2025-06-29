@@ -47,6 +47,7 @@ func main() {
 	mux.HandleFunc("/artist/", handlers.ArtistHandler)
 	mux.HandleFunc("/search", handlers.SearchHandler)
 	mux.HandleFunc("/static/", handlers.StaticHandler)
+	mux.HandleFunc("/api/artists", handlers.APIArtistsHandler)
 
 	// Get port from environment, default to 8080
 	port := os.Getenv("PORT")

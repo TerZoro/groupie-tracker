@@ -13,141 +13,268 @@ let searchCache = {
     lastUpdated: null
 };
 
-// Search functionality
+// Clean, Simple Search Implementation
+class SearchManager {
+  constructor() {
+    this.searchInput = document.getElementById('search');
+    this.suggestionsBox = document.getElementById('suggestions');
+    this.artistList = document.getElementById('artistList');
+    this.alertContainer = document.getElementById('alertContainer');
+    this.allArtists = [];
+    this.filteredArtists = [];
+    this.currentIndex = -1;
+    this.debounceTimer = null;
+    
+    this.init();
+  }
+
+  init() {
+    // Load data on startup
+    this.loadArtists();
+    
+    // Event listeners
+    this.searchInput.addEventListener('input', (e) => this.handleInput(e));
+    this.searchInput.addEventListener('keydown', (e) => this.handleKeydown(e));
+    this.searchInput.addEventListener('focus', () => this.showSuggestions());
+    this.searchInput.addEventListener('blur', () => this.hideSuggestions());
+    
+    // Keyboard shortcut: '/' to focus search (only when search is not focused)
+    document.addEventListener('keydown', (e) => {
+      if (e.key === '/' && document.activeElement !== this.searchInput) {
+        e.preventDefault();
+        this.searchInput.focus();
+      }
+    });
+  }
+
+  async loadArtists() {
+    try {
+      this.showLoading('Loading artists...');
+      const response = await fetch('/api/artists');
+      if (!response.ok) throw new Error('Failed to fetch artists');
+      
+      this.allArtists = await response.json();
+      this.filteredArtists = [...this.allArtists];
+      this.renderArtists();
+      this.hideLoading();
+    } catch (error) {
+      this.showError('Unable to fetch data—try again?', () => this.loadArtists());
+    }
+  }
+
+  handleInput(e) {
+    const query = e.target.value.trim();
+    
+    // Clear previous timer
+    clearTimeout(this.debounceTimer);
+    
+    // Debounce search
+    this.debounceTimer = setTimeout(() => {
+      this.performSearch(query);
+    }, 200);
+  }
+
+  performSearch(query) {
+    if (!query || query.trim() === '') {
+      this.filteredArtists = [...this.allArtists];
+      this.renderArtists();
+      this.hideSuggestions();
+      return;
+    }
+
+    const queryLower = query.toLowerCase().trim();
+    this.filteredArtists = this.allArtists.filter(artist => {
+      return (
+        artist.name.toLowerCase().includes(queryLower) ||
+        artist.members.some(member => member.toLowerCase().includes(queryLower)) ||
+        artist.firstAlbum.toLowerCase().includes(queryLower) ||
+        artist.creationDate.toString().includes(queryLower)
+      );
+    });
+
+    this.renderArtists();
+    this.showSuggestions(query);
+  }
+
+  showSuggestions(query = '') {
+    if (!query) {
+      this.hideSuggestions();
+      return;
+    }
+
+    const suggestions = this.getSuggestions(query);
+    this.renderSuggestions(suggestions);
+    this.suggestionsBox.classList.add('show');
+  }
+
+  getSuggestions(query) {
+    const queryLower = query.toLowerCase();
+    const results = [];
+
+    this.allArtists.forEach(artist => {
+      // Check artist name
+      if (artist.name.toLowerCase().includes(queryLower)) {
+        results.push({ text: artist.name, type: 'artist/band', artistId: artist.id });
+      }
+      
+      // Check members
+      artist.members.forEach(member => {
+        if (member.toLowerCase().includes(queryLower)) {
+          results.push({ text: member, type: 'member', artistId: artist.id });
+        }
+      });
+      
+      // Check first album
+      if (artist.firstAlbum.toLowerCase().includes(queryLower)) {
+        results.push({ text: artist.firstAlbum, type: 'first album', artistId: artist.id });
+      }
+      
+      // Check creation date
+      if (artist.creationDate.toString().includes(queryLower)) {
+        results.push({ text: artist.creationDate.toString(), type: 'creation date', artistId: artist.id });
+      }
+    });
+
+    // Deduplicate and limit to 5
+    const unique = [...new Map(results.map(r => [r.text + r.type, r])).values()];
+    return unique.slice(0, 5);
+  }
+
+  renderSuggestions(suggestions) {
+    this.suggestionsBox.innerHTML = '';
+    
+    suggestions.forEach(suggestion => {
+      const li = document.createElement('li');
+      li.innerHTML = `${suggestion.text} <span class="suggestion-type">— ${suggestion.type}</span>`;
+      li.addEventListener('click', () => {
+        // Navigate to artist page if we have an artistId
+        if (suggestion.artistId) {
+          window.location.href = `/artist/${suggestion.artistId}`;
+        } else {
+          // Fallback to search
+          this.searchInput.value = suggestion.text;
+          this.performSearch(suggestion.text);
+        }
+        this.hideSuggestions();
+      });
+      this.suggestionsBox.appendChild(li);
+    });
+  }
+
+  hideSuggestions() {
+    this.suggestionsBox.classList.remove('show');
+  }
+
+  handleKeydown(e) {
+    const suggestions = this.suggestionsBox.querySelectorAll('li');
+    
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        this.currentIndex = Math.min(this.currentIndex + 1, suggestions.length - 1);
+        this.highlightSuggestion(suggestions);
+        break;
+        
+      case 'ArrowUp':
+        e.preventDefault();
+        this.currentIndex = Math.max(this.currentIndex - 1, -1);
+        this.highlightSuggestion(suggestions);
+        break;
+        
+      case 'Enter':
+        e.preventDefault();
+        if (this.currentIndex >= 0 && suggestions[this.currentIndex]) {
+          suggestions[this.currentIndex].click();
+        } else {
+          this.performSearch(this.searchInput.value);
+        }
+        break;
+        
+      case 'Escape':
+        this.hideSuggestions();
+        this.searchInput.blur();
+        break;
+    }
+  }
+
+  highlightSuggestion(suggestions) {
+    suggestions.forEach((li, index) => {
+      li.style.backgroundColor = index === this.currentIndex ? 'var(--light)' : '';
+    });
+  }
+
+  renderArtists() {
+    if (this.filteredArtists.length === 0) {
+      this.artistList.innerHTML = `
+        <div style="display: flex; justify-content: center; align-items: center; min-height: 400px;">
+          <div class="alert alert-warning" style="margin: 0;">
+            No artists found matching your search.
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // Show all results (removed the 10-result limit)
+    let html = '';
+    this.filteredArtists.forEach(artist => {
+      html += `
+        <div class="artist-card">
+          <a href="/artist/${artist.id}">
+            <img src="${artist.image}" class="artist-image" alt="${artist.name}">
+          </a>
+          <div class="card-body">
+            <h5 class="card-title">${artist.name}</h5>
+            <p class="card-text">Formed: ${artist.creationDate}</p>
+            <a href="/artist/${artist.id}" class="btn btn-primary">View Details</a>
+          </div>
+        </div>
+      `;
+    });
+
+    this.artistList.innerHTML = html;
+  }
+
+  showMore() {
+    // Removed - not needed anymore
+  }
+
+  clearFilters() {
+    this.searchInput.value = '';
+    this.filteredArtists = [...this.allArtists];
+    this.renderArtists();
+    this.hideSuggestions();
+  }
+
+  showLoading(message) {
+    this.artistList.innerHTML = `
+      <div class="loading" style="display: flex; justify-content: center; align-items: center; min-height: 400px;">
+        <div style="text-align: center;">
+          <div class="spinner"></div>
+          <p>${message}</p>
+        </div>
+      </div>
+    `;
+  }
+
+  hideLoading() {
+    // Loading is hidden when renderArtists is called
+  }
+
+  showError(message, retryCallback) {
+    this.alertContainer.innerHTML = `
+      <div class="alert alert-danger" style="margin: var(--spacing-md) auto; text-align: center;">
+        ${message}
+        ${retryCallback ? '<button class="btn btn-danger" onclick="this.parentElement.remove(); searchManager.loadArtists()">Retry</button>' : ''}
+      </div>
+    `;
+  }
+}
+
+// Initialize search when DOM is loaded
+let searchManager;
 document.addEventListener('DOMContentLoaded', () => {
-    const searchInput = document.getElementById('searchInput');
-    const suggestionsContainer = document.getElementById('searchSuggestions');
-    const searchButton = document.getElementById('searchButton');
-    
-    let artists = [];
-    
-    // Add search button next to input
-    addSearchButton();
-    
-    // Fetch artists data on page load if we're on the home page
-    if (window.location.pathname === '/') {
-        fetchArtistsFromPage();
-    }
-    
-    // Add input event listener for suggestions
-    searchInput.addEventListener('input', handleSearchInput);
-    
-    // Remove old search button click handler binding here
-    // Add enter key handler (use keydown instead of keypress)
-    searchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            performSearch();
-        }
-    });
-    
-    // Close suggestions when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!searchInput.contains(e.target) && !suggestionsContainer.contains(e.target)) {
-            suggestionsContainer.style.display = 'none';
-        }
-    });
-
-    function addSearchButton() {
-        const searchContainer = document.querySelector('.search-container');
-        if (!searchContainer) return;
-        
-        const button = document.createElement('button');
-        button.id = 'searchButton';
-        button.className = 'search-btn';
-        button.innerHTML = 'Search';
-        button.type = 'button';
-        searchContainer.appendChild(button);
-
-        // Attach the click handler here!
-        button.addEventListener('click', performSearch);
-    }
-
-    function fetchArtistsFromPage() {
-        // Extract artist data from the current page
-        const artistCards = document.querySelectorAll('.artist-card');
-        artists = Array.from(artistCards).map(card => {
-            const link = card.querySelector('a[href^="/artist/"]');
-            const name = card.querySelector('.card-title');
-            const year = card.querySelector('.card-text');
-            
-            if (link && name) {
-                const id = link.getAttribute('href').split('/')[2];
-                return {
-                    id: parseInt(id),
-                    name: name.textContent,
-                    creationDate: year ? year.textContent.replace('Formed: ', '') : '',
-                    image: card.querySelector('img') ? card.querySelector('img').src : ''
-                };
-            }
-            return null;
-        }).filter(artist => artist !== null);
-    }
-    
-    function handleSearchInput(e) {
-        const query = e.target.value.trim();
-        if (query.length === 0) {
-            suggestionsContainer.style.display = 'none';
-            return;
-        }
-        if (query.length >= 2) {
-            showSuggestions(query);
-        }
-    }
-    
-    function showSuggestions(query) {
-        const suggestions = generateSuggestions(query);
-        
-        if (suggestions.length === 0) {
-            suggestionsContainer.style.display = 'none';
-            return;
-        }
-        
-        const suggestionsHTML = suggestions.map(suggestion => `
-            <div class="suggestion-item" onclick="goToArtist(${suggestion.id})">
-                <span class="suggestion-text">${suggestion.text}</span>
-                <span class="suggestion-type">${suggestion.type}</span>
-            </div>
-        `).join('');
-        
-        suggestionsContainer.innerHTML = suggestionsHTML;
-        suggestionsContainer.style.display = 'block';
-    }
-    
-    function generateSuggestions(query) {
-        query = query.toLowerCase();
-        const suggestions = [];
-        
-        artists.forEach(artist => {
-            // Check artist name
-            if (artist.name.toLowerCase().includes(query)) {
-                suggestions.push({
-                    id: artist.id,
-                    text: artist.name,
-                    type: 'artist'
-                });
-            }
-            
-            // Check creation date
-            if (artist.creationDate.includes(query)) {
-                suggestions.push({
-                    id: artist.id,
-                    text: `${artist.name} (${artist.creationDate})`,
-                    type: 'year'
-                });
-            }
-        });
-        
-        return suggestions.slice(0, 5); // Limit to 5 suggestions
-    }
-    
-    function performSearch() {
-        const query = searchInput.value.trim();
-        if (query.length === 0) return;
-        
-        // Use our existing /search endpoint
-        window.location.href = `/search?q=${encodeURIComponent(query)}`;
-    }
+  searchManager = new SearchManager();
 });
 
 // Global function for suggestion clicks

@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Groupie Tracker</title>
-    <link href="/static/css/styles.css?v=2" rel="stylesheet">
-    <link href="/static/css/search.css?v=2" rel="stylesheet">
+    <link href="/static/css/app.css" rel="stylesheet">
 </head>
 <body>
     <nav class="navbar">
@@ -17,18 +16,21 @@
     <div class="container mt-4">
         <h1 class="text-center mb-4">Artists</h1>
 
-        <!-- Search Bar -->
-        <div class="mb-4">
-            <div class="search-container">
-                <input type="text" id="searchInput" class="search-input" placeholder="Search artists, members, albums, or dates..." aria-label="Search">
-                <div id="searchSuggestions"></div>
-            </div>
+        <!-- Search Bar - Rule 2: Shortcuts -->
+        <div class="search-container">
+            <input type="text" id="search" class="search-input" placeholder="Search bands, members, albums, dates... (Press '/' anywhere to focus)" autocomplete="off">
+            <ul id="suggestions"></ul>
         </div>
 
-        <!-- Alert Container -->
+        <!-- Clear Filters Button - Rule 6: Easy Reversal -->
+        <div class="clear-filters">
+            <button class="btn btn-secondary" onclick="searchManager.clearFilters()">Clear Filters</button>
+        </div>
+
+        <!-- Alert Container - Rule 5: Simple Error Handling -->
         <div id="alertContainer"></div>
 
-        <!-- Artist List -->
+        <!-- Artist List - Rule 8: Reduce Memory Load -->
         <div id="artistList" class="artist-grid">
             {{if .}}
                 {{range .}}
@@ -44,8 +46,10 @@
                     </div>
                 {{end}}
             {{else}}
-                <div class="alert">
-                    No artists found. Please try again later.
+                <div style="display: flex; justify-content: center; align-items: center; min-height: 400px; grid-column: 1 / -1;">
+                    <div class="alert alert-warning" style="margin: 0;">
+                        No artists found. Please try again later.
+                    </div>
                 </div>
             {{end}}
         </div>

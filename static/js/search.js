@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const button = document.createElement('button');
         button.id = 'searchButton';
         button.className = 'search-btn';
-        button.innerHTML = '🔍';
+        button.innerHTML = 'Search';
         button.type = 'button';
         searchContainer.appendChild(button);
 

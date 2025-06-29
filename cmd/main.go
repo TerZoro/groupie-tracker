@@ -8,7 +8,35 @@ import (
 	"groupie-tracker/internal/handlers"
 )
 
+func checkRequiredDirs() {
+	requiredDirs := []string{"static", "internal/templates"}
+
+	for _, dir := range requiredDirs {
+		info, err := os.Stat(dir)
+		if os.IsNotExist(err) || !info.IsDir() {
+			log.Fatalf("ERROR: Required folder '%s' is missing or not a directory.\n", dir)
+		}
+		checkFolderNotEmpty(dir)
+	}
+}
+
+func checkFolderNotEmpty(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		log.Fatalf("ERROR: Failed to open '%s': %v", path, err)
+	}
+	defer f.Close()
+
+	files, err := f.Readdirnames(1)
+	if err != nil || len(files) == 0 {
+		log.Fatalf("ERROR: '%s' folder is empty or unreadable", path)
+	}
+}
+
 func main() {
+	// security measures
+	checkRequiredDirs()
+
 	// Initialize handlers (templates)
 	log.Println("Initializing handlers")
 	handlers.Init()
